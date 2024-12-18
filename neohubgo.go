@@ -43,7 +43,7 @@ type LiveInfo struct {
 	TimestampRecipes        int              `json:"TIMESTAMP_RECIPES"`
 	HubHoliday              bool             `json:"HUB_HOLIDAY"`
 	TimestampProfileTimers0 int              `json:"TIMESTAMP_PROFILE_TIMERS_0"`
-	HolidayEnd              int              `json:"HOLIDAY_END"`
+	HolidayEnd              json.RawMessage  `json:"HOLIDAY_END"`
 	HubTime                 int              `json:"HUB_TIME"`
 	TimestampSystem         int              `json:"TIMESTAMP_SYSTEM"`
 	Devices                 []LiveInfoDevice `json:"devices"`
@@ -200,8 +200,8 @@ func (n *neoHub) GetData(deviceId string) (*Data, error) {
 	if err != nil {
 		return nil, err
 	}
-	if data.Status != 1 {
-		return nil, fmt.Errorf("Unexpected status %d", data.Status)
+	if data.Status != 1 && data.Status != 201 {
+		return nil, fmt.Errorf("Unexpected status from getData %d", data.Status)
 	}
 
 	return &data, nil
