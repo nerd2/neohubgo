@@ -24,15 +24,15 @@ func newNeoCollector() *neoCollector {
 	return &neoCollector{
 		currentTemp: prometheus.NewDesc("current_temp",
 			"The current temperature of the zone",
-			[]string{"zoneName", "device"}, nil,
+			[]string{"zone", "device"}, nil,
 		),
 		targetTemp: prometheus.NewDesc("target_temp",
 			"The target temperature of the zone",
-			[]string{"zoneName", "device"}, nil,
+			[]string{"zone", "device"}, nil,
 		),
 		isHeating: prometheus.NewDesc("is_heating",
 			"Whether the current zone is heating",
-			[]string{"zoneName", "device"}, nil,
+			[]string{"zone", "device"}, nil,
 		),
 	}
 }
@@ -59,9 +59,11 @@ func (collector *neoCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, device := range devices {
 		if device.Online {
+			deviceName, _ := url.QueryUnescape(strings.Trim(device.DeviceName, " "))
 
 			data, err := nh.GetData(device.DeviceId)
 			if err != nil {
+				// If we've got this far, this may be recoverable and we may be able to query other devices
 				log.Println("Warn : Unable to query device -> ", err)
 			}
 
@@ -77,9 +79,9 @@ func (collector *neoCollector) Collect(ch chan<- prometheus.Metric) {
 					isHeating = 0.0
 				}
 
-				ch <- prometheus.MustNewConstMetric(collector.currentTemp, prometheus.GaugeValue, actualTemp, zoneName, device.DeviceName)
-				ch <- prometheus.MustNewConstMetric(collector.targetTemp, prometheus.GaugeValue, targetTemp, zoneName, device.DeviceName)
-				ch <- prometheus.MustNewConstMetric(collector.isHeating, prometheus.GaugeValue, isHeating, zoneName, device.DeviceName)
+				ch <- prometheus.MustNewConstMetric(collector.currentTemp, prometheus.GaugeValue, actualTemp, zoneName, deviceName)
+				ch <- prometheus.MustNewConstMetric(collector.targetTemp, prometheus.GaugeValue, targetTemp, zoneName, deviceName)
+				ch <- prometheus.MustNewConstMetric(collector.isHeating, prometheus.GaugeValue, isHeating, zoneName, deviceName)
 
 			}
 		}
