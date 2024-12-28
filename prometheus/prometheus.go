@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -23,15 +24,15 @@ func newNeoCollector() *neoCollector {
 	return &neoCollector{
 		currentTemp: prometheus.NewDesc("current_temp",
 			"The current temperature of the zone",
-			[]string{"zoneName"}, nil,
+			[]string{"zoneName", "device"}, nil,
 		),
 		targetTemp: prometheus.NewDesc("target_temp",
 			"The target temperature of the zone",
-			[]string{"zoneName"}, nil,
+			[]string{"zoneName", "device"}, nil,
 		),
 		isHeating: prometheus.NewDesc("is_heating",
 			"Whether the current zone is heating",
-			[]string{"zoneName"}, nil,
+			[]string{"zoneName", "device"}, nil,
 		),
 	}
 }
@@ -53,52 +54,35 @@ func (collector *neoCollector) Collect(ch chan<- prometheus.Metric) {
 	devices, err := nh.Login()
 	if err != nil {
 		log.Println("Error : couldn't connect -> ", err)
+		return
 	}
 
-	var dev *neohubgo.Device
-	if len(devices) == 0 {
-		log.Println("Error : No devices -> ", err)
-	} else if len(devices) > 1 {
-		deviceNames := []string{}
-		for _, device := range devices {
-			if len(os.Args) >= 3 && os.Args[3] == device.DeviceName {
-				dev = &device
-				break
+	for _, device := range devices {
+		if device.Online {
+
+			data, err := nh.GetData(device.DeviceId)
+			if err != nil {
+				log.Println("Warn : Unable to query device -> ", err)
 			}
-			deviceNames = append(deviceNames, device.DeviceName)
+
+			for _, liveDev := range data.CacheValue.LiveInfo.Devices {
+				actualTemp, _ := strconv.ParseFloat(liveDev.ActualTemp, 64)
+				targetTemp, _ := strconv.ParseFloat(liveDev.SetTemp, 64)
+				zoneName, _ := url.QueryUnescape(strings.Trim(liveDev.ZoneName, " "))
+
+				var isHeating float64
+				if liveDev.HeatOn {
+					isHeating = 1.0
+				} else {
+					isHeating = 0.0
+				}
+
+				ch <- prometheus.MustNewConstMetric(collector.currentTemp, prometheus.GaugeValue, actualTemp, zoneName, device.DeviceName)
+				ch <- prometheus.MustNewConstMetric(collector.targetTemp, prometheus.GaugeValue, targetTemp, zoneName, device.DeviceName)
+				ch <- prometheus.MustNewConstMetric(collector.isHeating, prometheus.GaugeValue, isHeating, zoneName, device.DeviceName)
+
+			}
 		}
-		if len(os.Args) < 4 {
-			log.Printf("Supply device name, options: %s\n", strings.Join(deviceNames, ","))
-		} else if dev == nil {
-			log.Printf("Requested device name not found")
-		}
-	} else {
-		dev = &devices[0]
-	}
-
-	if !dev.Online {
-		log.Println("Device offline")
-	}
-
-	data, err := nh.GetData(dev.DeviceId)
-	if err != nil {
-		log.Println("Error : something terrible happen -> ", err)
-	}
-
-	for _, liveDev := range data.CacheValue.LiveInfo.Devices {
-		actualTemp, _ := strconv.ParseFloat(liveDev.ActualTemp, 64)
-		targetTemp, _ := strconv.ParseFloat(liveDev.SetTemp, 64)
-		var isHeating float64
-		if liveDev.HeatOn {
-			isHeating = 1.0
-		} else {
-			isHeating = 0.0
-		}
-
-		ch <- prometheus.MustNewConstMetric(collector.currentTemp, prometheus.GaugeValue, actualTemp, liveDev.ZoneName)
-		ch <- prometheus.MustNewConstMetric(collector.targetTemp, prometheus.GaugeValue, targetTemp, liveDev.ZoneName)
-		ch <- prometheus.MustNewConstMetric(collector.isHeating, prometheus.GaugeValue, isHeating, liveDev.ZoneName)
-
 	}
 }
 
