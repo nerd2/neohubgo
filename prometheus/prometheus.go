@@ -52,12 +52,12 @@ func (collector *neoCollector) Collect(ch chan<- prometheus.Metric) {
 	nh := neohubgo.NewNeoHub(&neohubgo.Options{Username: username, Password: password})
 	devices, err := nh.Login()
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Println("Error : couldn't connect -> ", err)
 	}
 
 	var dev *neohubgo.Device
 	if len(devices) == 0 {
-		log.Fatalln("No devices")
+		log.Println("Error : No devices -> ", err)
 	} else if len(devices) > 1 {
 		deviceNames := []string{}
 		for _, device := range devices {
@@ -68,21 +68,21 @@ func (collector *neoCollector) Collect(ch chan<- prometheus.Metric) {
 			deviceNames = append(deviceNames, device.DeviceName)
 		}
 		if len(os.Args) < 4 {
-			log.Fatalf("Supply device name, options: %s\n", strings.Join(deviceNames, ","))
+			log.Printf("Supply device name, options: %s\n", strings.Join(deviceNames, ","))
 		} else if dev == nil {
-			log.Fatalf("Requested device name not found")
+			log.Printf("Requested device name not found")
 		}
 	} else {
 		dev = &devices[0]
 	}
 
 	if !dev.Online {
-		log.Fatalln("Device offline")
+		log.Println("Device offline")
 	}
 
 	data, err := nh.GetData(dev.DeviceId)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Println("Error : something terrible happen -> ", err)
 	}
 
 	for _, liveDev := range data.CacheValue.LiveInfo.Devices {
